@@ -85,14 +85,14 @@ def _onelake_base():
 
 def read_table(table_name):
     """
-    Read a table. Tries Delta Lake first (Tables/dbo/), 
-    then falls back to parquet (Files/app_data/).
-    Returns a pandas DataFrame.
+    Read a table. Tries Delta Lake first, then falls back to parquet.
+    Schema folder configurable via FABRIC_SCHEMA env var (default: dbo).
     """
+    schema = os.getenv("FABRIC_SCHEMA", "dbo")
     # Try Delta Lake first
     try:
         from deltalake import DeltaTable
-        delta_path = f"{ABFSS_BASE}/Tables/dbo/{table_name}"
+        delta_path = f"{ABFSS_BASE}/Tables/{schema}/{table_name}"
         print(f"DEBUG read_table: trying Delta path = {delta_path}")
         dt = DeltaTable(delta_path, storage_options=_storage_options())
         df = dt.to_pandas()
