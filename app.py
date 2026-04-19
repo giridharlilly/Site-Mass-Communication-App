@@ -74,12 +74,17 @@ def get_cached(table_name, force=False):
 
 def preload_startup():
     tables = ["SC_LookUp", "study_country_site_lookup"]
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = {name: pool.submit(read_table, name) for name in tables}
-    for name, future in futures.items():
+    print(f"DEBUG ABFSS_BASE: {os.getenv('ABFSS_BASE', 'NOT SET')}")
+    print(f"DEBUG FABRIC_CLIENT_ID: {os.getenv('FABRIC_CLIENT_ID', 'NOT SET')[:10]}...")
+    for name in tables:
         try:
-            _cache[name] = future.result()
+            df = read_table(name)
+            _cache[name] = df
             _cache_ts[name] = time.time()
+            print(f"DEBUG: {name} loaded = {len(df)} rows")
+        except Exception as e:
+            print(f"DEBUG: {name} FAILED = {e}")
+            _cache[name] = pd.DataFrame()
         except:
             pass
 
