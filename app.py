@@ -73,7 +73,7 @@ def get_cached(table_name, force=False):
         return pd.DataFrame()
 
 def preload_startup():
-    tables = ["SC_LookUp", "study_country_site_lookup"]
+    tables = ["sc_lookup", "study_country_site_lookup"]
     print(f"DEBUG ABFSS_BASE: {os.getenv('ABFSS_BASE', 'NOT SET')}")
     print(f"DEBUG FABRIC_CLIENT_ID: {os.getenv('FABRIC_CLIENT_ID', 'NOT SET')[:10]}...")
     for name in tables:
@@ -155,7 +155,7 @@ def select_template(clicks):
     if not ctx.triggered_id or not any(c for c in clicks if c):
         return [no_update] * 5
     idx = str(ctx.triggered_id["index"])
-    df = get_cached("SC_LookUp")
+    df = get_cached("sc_lookup")
     if df.empty:
         return [no_update] * 5
     row = df[df["ID"].astype(str) == idx]
@@ -178,7 +178,7 @@ def render_page(page, tpl, to_r, bcc_r, docs):
 
 
 def render_home():
-    df = get_cached("SC_LookUp")
+    df = get_cached("sc_lookup")
     if df.empty:
         return html.Div(dbc.Alert("No templates found.", color="warning"), style={"padding": "24px"})
     cards = []
