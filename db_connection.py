@@ -31,7 +31,8 @@ LAKEHOUSE_NAME = os.getenv("FABRIC_LAKEHOUSE_NAME", "MC_ProjectManagement_LH")
 APP_USER = os.getenv("APP_USER", "unknown")
 
 ONELAKE_DFS = "https://onelake.dfs.fabric.microsoft.com"
-ABFSS_BASE = f"abfss://{WORKSPACE_NAME}@onelake.dfs.fabric.microsoft.com/{LAKEHOUSE_NAME}.Lakehouse"
+ABFSS_BASE = os.getenv("ABFSS_BASE",
+    f"abfss://{WORKSPACE_NAME}@onelake.dfs.fabric.microsoft.com/{LAKEHOUSE_NAME}.Lakehouse")
 
 # ── Token Cache ───────────────────────────────────────────────────────
 _token_cache = {}
