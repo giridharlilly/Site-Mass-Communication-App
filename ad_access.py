@@ -389,7 +389,7 @@ def enforce_access(server_app, group_name=None, admin_list=None):
     """
     from flask import Response
 
-    _group = group_name or REQUIRED_AD_GROUP
+    _groups = [g.strip() for g in (group_name or REQUIRED_AD_GROUP).split(",") if g.strip()]
     _admins = [x.lower() for x in (admin_list or RLS_ADMINS)]
 
     @server_app.before_request
@@ -410,15 +410,16 @@ def enforce_access(server_app, group_name=None, admin_list=None):
             return
 
         # No group configured = allow all
-        if not _group:
+        if not _groups:
             return
 
-        # Check AD group (cached)
-        if check_ad_group(user_id, _group):
-            return
+        # Check if user is in ANY of the configured groups (cached)
+        for grp in _groups:
+            if check_ad_group(user_id, grp):
+                return
 
         # Denied
-        html = ACCESS_DENIED_HTML.format(group_name=_group)
+        html = ACCESS_DENIED_HTML.format(group_name=", ".join(_groups))
         return Response(html, status=403, content_type="text/html")
 
 
