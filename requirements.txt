@@ -1,0 +1,10 @@
+dash>=2.14.0
+dash-bootstrap-components>=1.5.0
+plotly>=5.18.0
+pandas>=2.1.0
+requests>=2.31.0
+python-dotenv==1.1.0
+gunicorn>=21.2.0
+deltalake>=0.14.0
+pyarrow>=14.0.0
+azure-identity>=1.15.0
