@@ -93,23 +93,25 @@ def read_table(table_name):
     try:
         from deltalake import DeltaTable
         delta_path = f"{ABFSS_BASE}/Tables/dbo/{table_name}"
+        print(f"DEBUG read_table: trying Delta path = {delta_path}")
         dt = DeltaTable(delta_path, storage_options=_storage_options())
         df = dt.to_pandas()
-        logger.info("Read %d rows from Delta table %s", len(df), table_name)
+        print(f"DEBUG read_table: {table_name} = {len(df)} rows from Delta")
         return df
     except Exception as e:
-        logger.debug("Delta read failed for %s: %s, trying parquet", table_name, e)
+        print(f"DEBUG read_table: Delta FAILED for {table_name}: {e}")
 
     # Fallback to parquet in Files/
     try:
         url = f"{_onelake_base()}/Files/app_data/{table_name}.parquet"
+        print(f"DEBUG read_table: trying parquet = {url}")
         resp = requests.get(url, headers=_storage_headers(), timeout=60)
+        print(f"DEBUG read_table: parquet status = {resp.status_code}")
         if resp.status_code == 200:
             df = pd.read_parquet(io.BytesIO(resp.content))
-            logger.info("Read %d rows from parquet %s", len(df), table_name)
             return df
     except Exception as e:
-        logger.debug("Parquet read also failed for %s: %s", table_name, e)
+        print(f"DEBUG read_table: Parquet FAILED for {table_name}: {e}")
 
     return pd.DataFrame()
 
