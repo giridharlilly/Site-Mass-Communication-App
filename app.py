@@ -72,16 +72,6 @@ def get_all_classifications():
     except: pass
     return []
 
-def _card(title, icon, color, children, flex=None):
-    style = {"background": CBG, "borderRadius": "8px", "padding": "10px 14px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"}
-    if flex: style["flex"] = flex
-    header = []
-    if title:
-        header = [html.Div([html.I(className=f"{icon} me-2", style={"color": color, "fontSize": "11px"}),
-            html.Span(title, style={"fontWeight": "700", "fontSize": "11px", "color": color, "letterSpacing": "0.5px"})],
-            className="d-flex align-items-center mb-2")]
-    return html.Div(header + children, style=style)
-
 # ═══════ LAYOUT ═══════
 app.layout = html.Div([
     dcc.Store(id="s-page", data="home"),
@@ -130,17 +120,12 @@ app.layout = html.Div([
                     dbc.Input(id="inp-subject", value="", size="sm",
                         style={"fontSize": "13px", "marginBottom": "12px", "background": "#FAFBFC", "border": f"1px solid {BD}", "borderRadius": "6px"}),
 
-                    html.Div([
-                        html.Label("Email Body", style={"fontSize": "11px", "fontWeight": "600", "color": TM}),
-                        dbc.Button("Edit Source", id="btn-toggle", size="sm", outline=True, color="secondary",
-                            style={"fontSize": "10px", "marginLeft": "auto"}),
-                    ], className="d-flex align-items-center mb-1"),
+                    html.Label("Email Body (click to edit)", style={"fontSize": "11px", "fontWeight": "600", "color": TM, "marginBottom": "4px"}),
 
                     html.Iframe(id="email-preview", srcDoc="", style={"width": "100%", "height": "420px",
-                        "border": f"1px solid {BD}", "borderRadius": "6px", "background": "white", "display": "block"}),
-                    dcc.Textarea(id="inp-body", value="", style={"width": "100%", "height": "420px", "fontSize": "12px",
-                        "border": f"1px solid {BD}", "borderRadius": "6px", "padding": "12px",
-                        "fontFamily": "monospace", "background": "#FAFBFC", "display": "none", "resize": "vertical"}),
+                        "border": f"1px solid {BD}", "borderRadius": "6px", "background": "white"}),
+                    # Hidden store for body HTML (synced via JS in iframe)
+                    dcc.Store(id="inp-body-store", data=""),
 
                     html.Div([html.Span("Placeholders: ", style={"fontWeight": "600", "fontSize": "10px"}),
                         html.Span("{{STUDY_ALIAS}} {{COUNTRY}} {{SITE}} {{DATE}} {{DOC_IDS}}",
@@ -234,6 +219,16 @@ app.layout = html.Div([
 ], style={"fontFamily": "'Segoe UI', -apple-system, sans-serif", "minHeight": "100vh", "background": BG})
 
 
+def _card(title, icon, color, children, flex=None):
+    style = {"background": CBG, "borderRadius": "8px", "padding": "10px 14px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"}
+    if flex: style["flex"] = flex
+    header = []
+    if title:
+        header = [html.Div([html.I(className=f"{icon} me-2", style={"color": color, "fontSize": "11px"}),
+            html.Span(title, style={"fontWeight": "700", "fontSize": "11px", "color": color, "letterSpacing": "0.5px"})],
+            className="d-flex align-items-center mb-2")]
+    return html.Div(header + children, style=style)
+
 
 # ═══════════════════════════════════════════════════════════════════════
 #  CALLBACKS
@@ -285,7 +280,7 @@ def grid(page):
 # Template click → populate compose page
 @callback([Output("s-page", "data", allow_duplicate=True), Output("s-tpl", "data", allow_duplicate=True),
     Output("s-to", "data", allow_duplicate=True), Output("s-bcc", "data", allow_duplicate=True), Output("s-docs", "data", allow_duplicate=True),
-    Output("inp-subject", "value"), Output("inp-body", "value"), Output("email-preview", "srcDoc"),
+    Output("inp-subject", "value"), Output("inp-body-store", "data"), Output("email-preview", "srcDoc"),
     Output("dd-lilly", "options"), Output("dd-lilly", "value", allow_duplicate=True),
     Output("dd-nonlilly", "options"), Output("dd-nonlilly", "value", allow_duplicate=True),
     Output("dd-class", "options"), Output("dd-class", "value", allow_duplicate=True)],
@@ -301,17 +296,15 @@ def select_tpl(clicks):
         ["ID", "Title", "Template_Name", "EmailSubject", "EmailBody", "Classifications", "Lilly_Groups", "Non_Lilly_Roles", "DocURL"]}
 
     body = tpl["EmailBody"]; subject = tpl["EmailSubject"]
+    if subject == "nan": subject = ""
     preview = _wrap_html(body)
 
-    # Parse template roles
     lilly_vals = list(dict.fromkeys([g.strip() for g in tpl["Lilly_Groups"].replace("\n", ";").split(";") if g.strip()]))
     nonlilly_vals = list(dict.fromkeys([g.strip() for g in tpl["Non_Lilly_Roles"].replace("\n", ";").split(";") if g.strip()]))
     class_vals = list(dict.fromkeys([c.strip() for c in tpl["Classifications"].replace("\n", ";").split(";") if c.strip()]))
 
-    # Build dropdown options — deduplicated, template values first
     all_roles = get_all_roles()
     all_class = get_all_classifications()
-    # Use dict.fromkeys to preserve order and deduplicate
     lilly_all = list(dict.fromkeys(lilly_vals + [r for r in all_roles if r not in lilly_vals]))
     nonlilly_all = list(dict.fromkeys(nonlilly_vals + [r for r in all_roles if r not in nonlilly_vals]))
     class_all = list(dict.fromkeys(class_vals + [c for c in all_class if c not in class_vals]))
@@ -325,26 +318,11 @@ def select_tpl(clicks):
 
 
 def _wrap_html(body):
-    return f"""<html><head><style>body{{font-family:'Segoe UI',sans-serif;font-size:13px;padding:12px;color:#1E293B;line-height:1.6;}}</style></head><body>{body}</body></html>"""
+    return f"""<html><head><style>
+body{{font-family:'Segoe UI',sans-serif;font-size:13px;padding:12px;color:#1E293B;line-height:1.6;outline:none;}}
+body:focus{{outline:none;}}
+</style></head><body contenteditable="true">{body}</body></html>"""
 
-# Toggle source/preview
-@callback([Output("email-preview", "style"), Output("inp-body", "style"), Output("btn-toggle", "children")],
-    Input("btn-toggle", "n_clicks"), State("btn-toggle", "children"), prevent_initial_call=True)
-def toggle_edit(n, label):
-    preview_show = {"width": "100%", "height": "420px", "border": f"1px solid {BD}", "borderRadius": "6px", "background": "white", "display": "block"}
-    preview_hide = {"width": "100%", "height": "420px", "border": f"1px solid {BD}", "borderRadius": "6px", "background": "white", "display": "none"}
-    src_show = {"width": "100%", "height": "420px", "fontSize": "12px", "border": f"1px solid {BD}", "borderRadius": "6px",
-        "padding": "12px", "fontFamily": "monospace", "background": "#FAFBFC", "display": "block", "resize": "vertical"}
-    src_hide = {"width": "100%", "height": "420px", "fontSize": "12px", "border": f"1px solid {BD}", "borderRadius": "6px",
-        "padding": "12px", "fontFamily": "monospace", "background": "#FAFBFC", "display": "none", "resize": "vertical"}
-    if label == "Edit Source":
-        return preview_hide, src_show, "Preview"
-    return preview_show, src_hide, "Edit Source"
-
-# Update preview from source
-@callback(Output("email-preview", "srcDoc", allow_duplicate=True), Input("inp-body", "value"), prevent_initial_call=True)
-def update_preview(body):
-    return _wrap_html(body) if body else ""
 
 
 # ═══════ FILTER CASCADE ═══════
@@ -377,42 +355,57 @@ def cascade_s(country, study):
 
 # ═══════ AUTO-POPULATE ON FILTER/ROLE CHANGE ═══════
 
-@callback([Output("s-to", "data", allow_duplicate=True),
+@callback([Output("s-bcc", "data", allow_duplicate=True),
     Output("inp-subject", "value", allow_duplicate=True),
-    Output("inp-body", "value", allow_duplicate=True),
+    Output("inp-body-store", "data", allow_duplicate=True),
     Output("email-preview", "srcDoc", allow_duplicate=True),
     Output("doc-list", "children"), Output("doc-header", "children"),
     Output("s-doc-data", "data")],
     [Input("dd-study", "value"), Input("dd-country", "value"), Input("dd-site", "value"),
      Input("btn-refresh-roles", "n_clicks")],
     [State("s-tpl", "data"), State("dd-lilly", "value"), State("dd-nonlilly", "value"),
-     State("dd-class", "value")],
+     State("dd-class", "value"), State("s-bcc", "data")],
     prevent_initial_call=True)
-def on_filter(study, country, site, refresh_n, tpl, lilly_sel, nonlilly_sel, class_sel):
+def on_filter(study, country, site, refresh_n, tpl, lilly_sel, nonlilly_sel, class_sel, existing_bcc):
     if not tpl: return no_update, no_update, no_update, no_update, no_update, no_update, no_update
 
     body = tpl.get("EmailBody", "")
     body = body.replace("{{STUDY_ALIAS}}", study or "").replace("{{COUNTRY}}", country or "")
     body = body.replace("{{SITE}}", site or "").replace("{{DATE}}", date.today().strftime("%d %B %Y"))
     subject = tpl.get("EmailSubject", "").replace("{{STUDY_ALIAS}}", study or "")
+    if subject == "nan": subject = ""
 
     lg = lilly_sel or []
     nlr = nonlilly_sel or []
     cls = class_sel or []
 
-    recipients = _auto_recips(study, country, site, lg, nlr)
+    # Auto-populate recipients based on current filter level
+    auto_emails = _auto_recips(study, country, site, lg, nlr)
+
+    # Merge auto emails into BCC (preserve manually added ones)
+    existing = set(existing_bcc or [])
+    for e in auto_emails:
+        existing.add(e)
+    bcc_list = sorted(list(existing))
+
     docs_html, doc_count, doc_data = _render_docs(study, country, site, cls)
 
     doc_header = [html.I(className="fas fa-file-alt me-2", style={"color": P, "fontSize": "11px"}),
         f"eTMF & Non-TMF Documents ({doc_count} found)"]
 
-    return recipients, subject, body, _wrap_html(body), docs_html, doc_header, doc_data
+    return bcc_list, subject, body, _wrap_html(body), docs_html, doc_header, doc_data
 
 
 def _auto_recips(study, country, site, lg, nlr):
+    """Get recipients based on current filter level:
+    - Study only selected → Study sponsor personnel
+    - Study + Country → Study + Country sponsor personnel
+    - Study + Country + Site → Study + Country + Site personnel
+    """
     emails = set()
     if not study: return sorted(list(emails))
 
+    # Always include Study level (Lilly Groups)
     if lg:
         try:
             df = gc("study_sponsor_personnel_assignment")
@@ -421,6 +414,7 @@ def _auto_recips(study, country, site, lg, nlr):
                 emails.update(m["Email_Address"].str.strip().tolist())
         except: pass
 
+    # Add Country level when country is selected (Lilly Groups)
     if country and lg:
         try:
             df = gc("country_sponsor_personnel_assignment")
@@ -429,6 +423,7 @@ def _auto_recips(study, country, site, lg, nlr):
                 emails.update(m["Email_Address"].str.strip().tolist())
         except: pass
 
+    # Add Site level when site is selected (Lilly Groups + Non Lilly Roles)
     if site:
         all_r = list(set(lg + nlr))
         if all_r:
@@ -500,10 +495,10 @@ def _render_docs(study, country, site, class_filter):
 # ═══════ DOC SELECTION → INSERT INTO EMAIL BODY ═══════
 
 @callback([Output("s-docs", "data", allow_duplicate=True),
-    Output("inp-body", "value", allow_duplicate=True),
+    Output("inp-body-store", "data", allow_duplicate=True),
     Output("email-preview", "srcDoc", allow_duplicate=True)],
     Input({"type": "doc-chk", "index": ALL}, "value"),
-    [State("s-doc-data", "data"), State("inp-body", "value")],
+    [State("s-doc-data", "data"), State("inp-body-store", "data")],
     prevent_initial_call=True)
 def on_doc_select(checks, doc_data, current_body):
     if not checks or not doc_data:
@@ -524,18 +519,19 @@ def on_doc_select(checks, doc_data, current_body):
     else:
         bullet_html = ""
 
-    # Replace {{DOC_IDS}} or append to body
     body = current_body or ""
+    # Remove any previous doc list
+    if "<!-- DOC_LIST_START -->" in body:
+        start = body.index("<!-- DOC_LIST_START -->")
+        end = body.index("<!-- DOC_LIST_END -->") + len("<!-- DOC_LIST_END -->") if "<!-- DOC_LIST_END -->" in body else len(body)
+        body = body[:start] + body[end:]
+
+    # Replace placeholder or append
     if "{{DOC_IDS}}" in body:
         body = body.replace("{{DOC_IDS}}", bullet_html)
     elif bullet_html:
-        # Remove any previous doc list and append new one
-        if "<!-- DOC_LIST_START -->" in body:
-            start = body.index("<!-- DOC_LIST_START -->")
-            end = body.index("<!-- DOC_LIST_END -->") + len("<!-- DOC_LIST_END -->") if "<!-- DOC_LIST_END -->" in body else len(body)
-            body = body[:start] + body[end:]
         body = body + f"\n<!-- DOC_LIST_START -->\n<h4>Selected Documents:</h4>\n{bullet_html}\n<!-- DOC_LIST_END -->"
-
+    
     return selected, body, _wrap_html(body)
 
 
@@ -545,16 +541,22 @@ def on_doc_select(checks, doc_data, current_body):
     [Input("s-to", "data"), Input("s-bcc", "data"), Input("s-docs", "data")])
 def upd_to(to_r, bcc_r, docs):
     to_r = to_r or []; bcc_r = bcc_r or []; docs = docs or []
+    # Enable send if either TO or BCC has recipients
+    has_recipients = len(to_r) > 0 or len(bcc_r) > 0
     return ("; ".join(to_r),
         [html.I(className="fas fa-users me-2", style={"color": P, "fontSize": "11px"}), f"TO Recipients ({len(to_r)})"],
-        len(to_r) == 0,
+        not has_recipients,
         f"TO: {len(to_r)}  |  BCC: {len(bcc_r)}  |  Docs: {len(docs)}")
 
 @callback([Output("bcc-display", "children"), Output("bcc-header", "children")], Input("s-bcc", "data"))
 def upd_bcc(bcc_r):
     bcc_r = bcc_r or []
-    return ("; ".join(bcc_r),
-        [html.I(className="fas fa-eye-slash me-2", style={"color": ACC, "fontSize": "11px"}), f"BCC — External ({len(bcc_r)})"])
+    display = dcc.Textarea(value="; ".join(bcc_r), readOnly=True,
+        style={"width": "100%", "height": "60px", "fontSize": "10px", "background": "#F0F7FF",
+            "border": f"1px solid #B0D0F0", "borderRadius": "6px", "padding": "6px", "resize": "none",
+            "color": ACC}) if bcc_r else ""
+    return (display,
+        [html.I(className="fas fa-eye-slash me-2", style={"color": ACC, "fontSize": "11px"}), f"BCC — Auto + External ({len(bcc_r)})"])
 
 
 # ═══════ ADD TO / BCC ═══════
