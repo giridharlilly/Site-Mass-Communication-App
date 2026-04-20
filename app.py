@@ -363,9 +363,9 @@ def cascade_s(country, study):
     [Input("dd-study", "value"), Input("dd-country", "value"), Input("dd-site", "value"),
      Input("btn-refresh-roles", "n_clicks")],
     [State("s-tpl", "data"), State("dd-lilly", "value"), State("dd-nonlilly", "value"),
-     State("dd-class", "value"), State("s-bcc", "data")],
+     State("dd-class", "value")],
     prevent_initial_call=True)
-def on_filter(study, country, site, refresh_n, tpl, lilly_sel, nonlilly_sel, class_sel, existing_bcc):
+def on_filter(study, country, site, refresh_n, tpl, lilly_sel, nonlilly_sel, class_sel):
     if not tpl: return no_update, no_update, no_update, no_update, no_update, no_update, no_update
 
     body = tpl.get("EmailBody", "")
@@ -378,14 +378,8 @@ def on_filter(study, country, site, refresh_n, tpl, lilly_sel, nonlilly_sel, cla
     nlr = nonlilly_sel or []
     cls = class_sel or []
 
-    # Auto-populate recipients based on current filter level
-    auto_emails = _auto_recips(study, country, site, lg, nlr)
-
-    # Merge auto emails into BCC (preserve manually added ones)
-    existing = set(existing_bcc or [])
-    for e in auto_emails:
-        existing.add(e)
-    bcc_list = sorted(list(existing))
+    # Get recipients for current filter level (replaces previous, not merge)
+    bcc_list = _auto_recips(study, country, site, lg, nlr)
 
     docs_html, doc_count, doc_data = _render_docs(study, country, site, cls)
 
@@ -396,40 +390,42 @@ def on_filter(study, country, site, refresh_n, tpl, lilly_sel, nonlilly_sel, cla
 
 
 def _auto_recips(study, country, site, lg, nlr):
-    """Get recipients based on current filter level:
-    - Study only selected → Study sponsor personnel
-    - Study + Country → Study + Country sponsor personnel
-    - Study + Country + Site → Study + Country + Site personnel
+    """Get recipients based on CURRENT filter level only:
+    - Site selected → query Site personnel table only
+    - Country selected (no site) → query Country personnel table only
+    - Study only → query Study personnel table only
     """
     emails = set()
     if not study: return sorted(list(emails))
 
-    # Always include Study level (Lilly Groups)
-    if lg:
-        try:
-            df = gc("study_sponsor_personnel_assignment")
-            if not df.empty:
-                m = df[(df["Study_Alias"] == study) & (df["Study_Team_Role"].isin(lg)) & (df["Email_Address"].notna()) & (df["Email_Address"] != "")]
-                emails.update(m["Email_Address"].str.strip().tolist())
-        except: pass
-
-    # Add Country level when country is selected (Lilly Groups)
-    if country and lg:
-        try:
-            df = gc("country_sponsor_personnel_assignment")
-            if not df.empty:
-                m = df[(df["Study_Alias"] == study) & (df["Country_Name"] == country) & (df["Study_Team_Role"].isin(lg)) & (df["Email_Address"].notna()) & (df["Email_Address"] != "")]
-                emails.update(m["Email_Address"].str.strip().tolist())
-        except: pass
-
-    # Add Site level when site is selected (Lilly Groups + Non Lilly Roles)
-    if site:
+    if site and country:
+        # Site level — use Lilly Groups + Non Lilly Roles from site table
         all_r = list(set(lg + nlr))
         if all_r:
             try:
                 df = gc("study_site_sponsor_personnel_combined")
                 if not df.empty:
                     m = df[(df["Study_Alias"] == study) & (df["Country_Name"] == country) & (df["Site"] == site) & (df["Role"].isin(all_r)) & (df["Email_Address"].notna()) & (df["Email_Address"] != "")]
+                    emails.update(m["Email_Address"].str.strip().tolist())
+            except: pass
+
+    elif country:
+        # Country level — use Lilly Groups from country table
+        if lg:
+            try:
+                df = gc("country_sponsor_personnel_assignment")
+                if not df.empty:
+                    m = df[(df["Study_Alias"] == study) & (df["Country_Name"] == country) & (df["Study_Team_Role"].isin(lg)) & (df["Email_Address"].notna()) & (df["Email_Address"] != "")]
+                    emails.update(m["Email_Address"].str.strip().tolist())
+            except: pass
+
+    else:
+        # Study level only — use Lilly Groups from study table
+        if lg:
+            try:
+                df = gc("study_sponsor_personnel_assignment")
+                if not df.empty:
+                    m = df[(df["Study_Alias"] == study) & (df["Study_Team_Role"].isin(lg)) & (df["Email_Address"].notna()) & (df["Email_Address"] != "")]
                     emails.update(m["Email_Address"].str.strip().tolist())
             except: pass
 
