@@ -391,7 +391,7 @@ def _auto_recipients(tpl, study, country, site):
 
     if lg:
         try:
-            df = get_cached("Study_Sponsor_Personnel_Assignment")
+            df = get_cached("study_sponsor_personnel_assignment")
             if not df.empty:
                 m = df[(df["Study_Alias"] == study) & (df["Study_Team_Role"].isin(lg)) &
                     (df["Email_Address"].notna()) & (df["Email_Address"] != "")]
@@ -401,7 +401,7 @@ def _auto_recipients(tpl, study, country, site):
 
     if country and lg:
         try:
-            df = get_cached("Country_Sponsor_Personnel_Assignment")
+            df = get_cached("country_sponsor_personnel_assignment")
             if not df.empty:
                 m = df[(df["Study_Alias"] == study) & (df["Country_Name"] == country) &
                     (df["Study_Team_Role"].isin(lg)) & (df["Email_Address"].notna()) & (df["Email_Address"] != "")]
@@ -413,7 +413,7 @@ def _auto_recipients(tpl, study, country, site):
         all_r = list(set(lg + nlr))
         if all_r:
             try:
-                df = get_cached("Study_Site_Sponsor_Personnel_Combined")
+                df = get_cached("study_site_sponsor_personnel_combined")
                 if not df.empty:
                     m = df[(df["Study_Alias"] == study) & (df["Country_Name"] == country) &
                         (df["Site"] == site) & (df["Role"].isin(all_r)) &
@@ -430,7 +430,7 @@ def _render_docs(tpl, study, country, site):
         return html.Div("Select a study to load documents.",
             style={"color": TEXT_LIGHT, "fontSize": "11px", "padding": "12px", "textAlign": "center"})
     try:
-        df = get_cached("Documents")
+        df = get_cached("documents")
         if df.empty:
             return html.Div("No documents available.",
                 style={"color": TEXT_LIGHT, "fontSize": "11px", "padding": "12px", "textAlign": "center"})
