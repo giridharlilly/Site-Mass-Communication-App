@@ -72,16 +72,6 @@ def get_all_classifications():
     except: pass
     return []
 
-def _card(title, icon, color, children, flex=None):
-    style = {"background": CBG, "borderRadius": "8px", "padding": "10px 14px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"}
-    if flex: style["flex"] = flex
-    header = []
-    if title:
-        header = [html.Div([html.I(className=f"{icon} me-2", style={"color": color, "fontSize": "11px"}),
-            html.Span(title, style={"fontWeight": "700", "fontSize": "11px", "color": color, "letterSpacing": "0.5px"})],
-            className="d-flex align-items-center mb-2")]
-    return html.Div(header + children, style=style)
-
 # ═══════ LAYOUT ═══════
 app.layout = html.Div([
     dcc.Store(id="s-page", data="home"),
@@ -137,10 +127,10 @@ app.layout = html.Div([
                     ], className="d-flex align-items-center mb-1"),
 
                     html.Iframe(id="email-preview", srcDoc="", style={"width": "100%", "height": "420px",
-                        "border": f"1px solid {BD}", "borderRadius": "6px", "background": "white"}),
+                        "border": f"1px solid {BD}", "borderRadius": "6px", "background": "white", "display": "block"}),
                     dcc.Textarea(id="inp-body", value="", style={"width": "100%", "height": "420px", "fontSize": "12px",
                         "border": f"1px solid {BD}", "borderRadius": "6px", "padding": "12px",
-                        "fontFamily": "monospace", "background": "#FAFBFC", "display": "none"}),
+                        "fontFamily": "monospace", "background": "#FAFBFC", "display": "none", "resize": "vertical"}),
 
                     html.Div([html.Span("Placeholders: ", style={"fontWeight": "600", "fontSize": "10px"}),
                         html.Span("{{STUDY_ALIAS}} {{COUNTRY}} {{SITE}} {{DATE}} {{DOC_IDS}}",
@@ -214,6 +204,7 @@ app.layout = html.Div([
                     html.Div(id="doc-header", style={"fontWeight": "700", "fontSize": "12px", "color": P, "marginBottom": "2px"}),
                     html.Div("Check documents to include VV-TMF IDs in email body",
                         style={"color": TL, "fontSize": "9px", "marginBottom": "6px"}),
+                    dcc.Store(id="s-doc-data", data=[]),  # Store doc info for checkbox lookup
                     html.Div(id="doc-list", style={"maxHeight": "160px", "overflowY": "auto",
                         "borderRadius": "6px", "border": f"1px solid {BD}", "background": "#FAFBFC"}),
                 ], flex="1"),
@@ -232,6 +223,16 @@ app.layout = html.Div([
     ]),
 ], style={"fontFamily": "'Segoe UI', -apple-system, sans-serif", "minHeight": "100vh", "background": BG})
 
+
+def _card(title, icon, color, children, flex=None):
+    style = {"background": CBG, "borderRadius": "8px", "padding": "10px 14px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"}
+    if flex: style["flex"] = flex
+    header = []
+    if title:
+        header = [html.Div([html.I(className=f"{icon} me-2", style={"color": color, "fontSize": "11px"}),
+            html.Span(title, style={"fontWeight": "700", "fontSize": "11px", "color": color, "letterSpacing": "0.5px"})],
+            className="d-flex align-items-center mb-2")]
+    return html.Div(header + children, style=style)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -303,16 +304,21 @@ def select_tpl(clicks):
     preview = _wrap_html(body)
 
     # Parse template roles
-    lilly_vals = [g.strip() for g in tpl["Lilly_Groups"].replace("\n", ";").split(";") if g.strip()]
-    nonlilly_vals = [g.strip() for g in tpl["Non_Lilly_Roles"].replace("\n", ";").split(";") if g.strip()]
-    class_vals = [c.strip() for c in tpl["Classifications"].replace("\n", ";").split(";") if c.strip()]
+    lilly_vals = list(dict.fromkeys([g.strip() for g in tpl["Lilly_Groups"].replace("\n", ";").split(";") if g.strip()]))
+    nonlilly_vals = list(dict.fromkeys([g.strip() for g in tpl["Non_Lilly_Roles"].replace("\n", ";").split(";") if g.strip()]))
+    class_vals = list(dict.fromkeys([c.strip() for c in tpl["Classifications"].replace("\n", ";").split(";") if c.strip()]))
 
-    # Build dropdown options (template values + all available)
+    # Build dropdown options — deduplicated, template values first
     all_roles = get_all_roles()
     all_class = get_all_classifications()
-    lilly_opts = [{"label": r, "value": r} for r in sorted(set(lilly_vals + all_roles))]
-    nonlilly_opts = [{"label": r, "value": r} for r in sorted(set(nonlilly_vals + all_roles))]
-    class_opts = [{"label": c, "value": c} for c in sorted(set(class_vals + all_class))]
+    # Use dict.fromkeys to preserve order and deduplicate
+    lilly_all = list(dict.fromkeys(lilly_vals + [r for r in all_roles if r not in lilly_vals]))
+    nonlilly_all = list(dict.fromkeys(nonlilly_vals + [r for r in all_roles if r not in nonlilly_vals]))
+    class_all = list(dict.fromkeys(class_vals + [c for c in all_class if c not in class_vals]))
+
+    lilly_opts = [{"label": r, "value": r} for r in lilly_all]
+    nonlilly_opts = [{"label": r, "value": r} for r in nonlilly_all]
+    class_opts = [{"label": c, "value": c} for c in class_all]
 
     return ("compose", tpl, [], [], [], subject, body, preview,
         lilly_opts, lilly_vals, nonlilly_opts, nonlilly_vals, class_opts, class_vals)
@@ -325,14 +331,15 @@ def _wrap_html(body):
 @callback([Output("email-preview", "style"), Output("inp-body", "style"), Output("btn-toggle", "children")],
     Input("btn-toggle", "n_clicks"), State("btn-toggle", "children"), prevent_initial_call=True)
 def toggle_edit(n, label):
-    show = {"width": "100%", "height": "420px", "border": f"1px solid {BD}", "borderRadius": "6px", "background": "white"}
-    hide_preview = {**show, "display": "none"}
-    src = {"width": "100%", "height": "420px", "fontSize": "12px", "border": f"1px solid {BD}", "borderRadius": "6px",
-        "padding": "12px", "fontFamily": "monospace", "background": "#FAFBFC"}
-    hide_src = {**src, "display": "none"}
+    preview_show = {"width": "100%", "height": "420px", "border": f"1px solid {BD}", "borderRadius": "6px", "background": "white", "display": "block"}
+    preview_hide = {"width": "100%", "height": "420px", "border": f"1px solid {BD}", "borderRadius": "6px", "background": "white", "display": "none"}
+    src_show = {"width": "100%", "height": "420px", "fontSize": "12px", "border": f"1px solid {BD}", "borderRadius": "6px",
+        "padding": "12px", "fontFamily": "monospace", "background": "#FAFBFC", "display": "block", "resize": "vertical"}
+    src_hide = {"width": "100%", "height": "420px", "fontSize": "12px", "border": f"1px solid {BD}", "borderRadius": "6px",
+        "padding": "12px", "fontFamily": "monospace", "background": "#FAFBFC", "display": "none", "resize": "vertical"}
     if label == "Edit Source":
-        return hide_preview, src, "Preview"
-    return show, hide_src, "Edit Source"
+        return preview_hide, src_show, "Preview"
+    return preview_show, src_hide, "Edit Source"
 
 # Update preview from source
 @callback(Output("email-preview", "srcDoc", allow_duplicate=True), Input("inp-body", "value"), prevent_initial_call=True)
@@ -374,32 +381,32 @@ def cascade_s(country, study):
     Output("inp-subject", "value", allow_duplicate=True),
     Output("inp-body", "value", allow_duplicate=True),
     Output("email-preview", "srcDoc", allow_duplicate=True),
-    Output("doc-list", "children"), Output("doc-header", "children")],
+    Output("doc-list", "children"), Output("doc-header", "children"),
+    Output("s-doc-data", "data")],
     [Input("dd-study", "value"), Input("dd-country", "value"), Input("dd-site", "value"),
      Input("btn-refresh-roles", "n_clicks")],
     [State("s-tpl", "data"), State("dd-lilly", "value"), State("dd-nonlilly", "value"),
      State("dd-class", "value")],
     prevent_initial_call=True)
 def on_filter(study, country, site, refresh_n, tpl, lilly_sel, nonlilly_sel, class_sel):
-    if not tpl: return no_update, no_update, no_update, no_update, no_update, no_update
+    if not tpl: return no_update, no_update, no_update, no_update, no_update, no_update, no_update
 
     body = tpl.get("EmailBody", "")
     body = body.replace("{{STUDY_ALIAS}}", study or "").replace("{{COUNTRY}}", country or "")
     body = body.replace("{{SITE}}", site or "").replace("{{DATE}}", date.today().strftime("%d %B %Y"))
     subject = tpl.get("EmailSubject", "").replace("{{STUDY_ALIAS}}", study or "")
 
-    # Use selected roles (not template defaults)
     lg = lilly_sel or []
     nlr = nonlilly_sel or []
     cls = class_sel or []
 
     recipients = _auto_recips(study, country, site, lg, nlr)
-    docs_html, doc_count = _render_docs(study, country, site, cls)
+    docs_html, doc_count, doc_data = _render_docs(study, country, site, cls)
 
     doc_header = [html.I(className="fas fa-file-alt me-2", style={"color": P, "fontSize": "11px"}),
         f"eTMF & Non-TMF Documents ({doc_count} found)"]
 
-    return recipients, subject, body, _wrap_html(body), docs_html, doc_header
+    return recipients, subject, body, _wrap_html(body), docs_html, doc_header, doc_data
 
 
 def _auto_recips(study, country, site, lg, nlr):
@@ -437,11 +444,11 @@ def _auto_recips(study, country, site, lg, nlr):
 
 def _render_docs(study, country, site, class_filter):
     if not study:
-        return html.Div("Select a study to load documents.", style={"color": TL, "fontSize": "11px", "padding": "10px", "textAlign": "center"}), 0
+        return html.Div("Select a study to load documents.", style={"color": TL, "fontSize": "11px", "padding": "10px", "textAlign": "center"}), 0, []
     try:
         df = gc("documents")
         if df.empty:
-            return html.Div("No documents.", style={"color": TL, "fontSize": "11px", "padding": "10px", "textAlign": "center"}), 0
+            return html.Div("No documents.", style={"color": TL, "fontSize": "11px", "padding": "10px", "textAlign": "center"}), 0, []
 
         mask = df["Study_Alias"] == study
         s_lvl = mask & (df["Site"].isna() | (df["Site"] == "")) & (df["Country_Code"].isna() | (df["Country_Code"] == ""))
@@ -458,9 +465,10 @@ def _render_docs(study, country, site, class_filter):
         filtered = filtered.head(150)
 
         if filtered.empty:
-            return html.Div("No documents found.", style={"color": TL, "fontSize": "11px", "padding": "10px", "textAlign": "center"}), 0
+            return html.Div("No documents found.", style={"color": TL, "fontSize": "11px", "padding": "10px", "textAlign": "center"}), 0, []
 
         items = []
+        doc_data = []  # Store doc info for checkbox callback
         for i, (_, doc) in enumerate(filtered.iterrows()):
             dn = str(doc.get("Document_Number", "")); dname = str(doc.get("Document_Name", ""))
             dl = str(doc.get("DocLink", "")); cl = str(doc.get("Classification", ""))
@@ -469,6 +477,8 @@ def _render_docs(study, country, site, class_filter):
             if not sv and not cv: lbl, lc = "Study", P
             elif cv and not sv: lbl, lc = "Country", SUC
             else: lbl, lc = "Site", WRN
+
+            doc_data.append({"num": dn, "name": dname, "link": dl})
 
             items.append(html.Div([
                 dbc.Checkbox(id={"type": "doc-chk", "index": i}, value=False,
@@ -482,9 +492,9 @@ def _render_docs(study, country, site, class_filter):
                 ], style={"flex": "1"}),
             ], className="d-flex", style={"padding": "4px 8px", "borderBottom": "1px solid #F0F0F0"}))
 
-        return html.Div(items), doc_count
+        return html.Div(items), doc_count, doc_data
     except Exception as e:
-        return html.Div(f"Error: {e}", style={"color": DNG, "fontSize": "11px", "padding": "10px"}), 0
+        return html.Div(f"Error: {e}", style={"color": DNG, "fontSize": "11px", "padding": "10px"}), 0, []
 
 
 # ═══════ DOC SELECTION → INSERT INTO EMAIL BODY ═══════
@@ -493,43 +503,38 @@ def _render_docs(study, country, site, class_filter):
     Output("inp-body", "value", allow_duplicate=True),
     Output("email-preview", "srcDoc", allow_duplicate=True)],
     Input({"type": "doc-chk", "index": ALL}, "value"),
-    [State("doc-list", "children"), State("inp-body", "value"), State("s-tpl", "data")],
+    [State("s-doc-data", "data"), State("inp-body", "value")],
     prevent_initial_call=True)
-def on_doc_select(checks, doc_children, current_body, tpl):
-    if not checks or not doc_children:
+def on_doc_select(checks, doc_data, current_body):
+    if not checks or not doc_data:
         return no_update, no_update, no_update
 
-    # Get selected doc info from the doc list
     selected = []
-    try:
-        items = doc_children.get("props", {}).get("children", []) if isinstance(doc_children, dict) else []
-        for i, checked in enumerate(checks):
-            if checked and i < len(items):
-                try:
-                    item = items[i]
-                    # Navigate to the link text
-                    inner = item.get("props", {}).get("children", [])
-                    if len(inner) >= 2:
-                        link_div = inner[1]
-                        link = link_div.get("props", {}).get("children", [{}])[0]
-                        doc_text = link.get("props", {}).get("children", "")
-                        if doc_text:
-                            selected.append(doc_text)
-                except:
-                    pass
-    except:
-        pass
+    for i, checked in enumerate(checks):
+        if checked and i < len(doc_data):
+            d = doc_data[i]
+            selected.append(f"{d['num']} - {d['name']}")
 
-    # Build bullet list
+    # Build bullet list HTML
     if selected:
-        bullet_html = "<ul>" + "".join(f"<li><strong>{d.split(' - ')[0]}</strong> – {' - '.join(d.split(' - ')[1:])}</li>" for d in selected) + "</ul>"
+        bullet_html = "<ul>" + "".join(
+            f"<li><strong>{d.split(' - ')[0]}</strong> – {' - '.join(d.split(' - ')[1:])}</li>"
+            for d in selected
+        ) + "</ul>"
     else:
         bullet_html = ""
 
-    # Replace {{DOC_IDS}} in body or append
+    # Replace {{DOC_IDS}} or append to body
     body = current_body or ""
     if "{{DOC_IDS}}" in body:
         body = body.replace("{{DOC_IDS}}", bullet_html)
+    elif bullet_html:
+        # Remove any previous doc list and append new one
+        if "<!-- DOC_LIST_START -->" in body:
+            start = body.index("<!-- DOC_LIST_START -->")
+            end = body.index("<!-- DOC_LIST_END -->") + len("<!-- DOC_LIST_END -->") if "<!-- DOC_LIST_END -->" in body else len(body)
+            body = body[:start] + body[end:]
+        body = body + f"\n<!-- DOC_LIST_START -->\n<h4>Selected Documents:</h4>\n{bullet_html}\n<!-- DOC_LIST_END -->"
 
     return selected, body, _wrap_html(body)
 
