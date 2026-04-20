@@ -211,7 +211,7 @@ app.layout = html.Div([
                     "boxShadow": "0 1px 4px rgba(0,0,0,0.06)"}),
             ], style={"flex": "1", "display": "flex", "flexDirection": "column"}),
         ], style={"display": "flex", "alignItems": "stretch"}),
-    ], style={"padding": "16px 20px"}),
+    ]),
 
 ], style={"fontFamily": "'Segoe UI', -apple-system, sans-serif", "minHeight": "100vh", "background": BG})
 
