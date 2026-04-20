@@ -72,6 +72,16 @@ def get_all_classifications():
     except: pass
     return []
 
+def _card(title, icon, color, children, flex=None):
+    style = {"background": CBG, "borderRadius": "8px", "padding": "10px 14px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"}
+    if flex: style["flex"] = flex
+    header = []
+    if title:
+        header = [html.Div([html.I(className=f"{icon} me-2", style={"color": color, "fontSize": "11px"}),
+            html.Span(title, style={"fontWeight": "700", "fontSize": "11px", "color": color, "letterSpacing": "0.5px"})],
+            className="d-flex align-items-center mb-2")]
+    return html.Div(header + children, style=style)
+
 # ═══════ LAYOUT ═══════
 app.layout = html.Div([
     dcc.Store(id="s-page", data="home"),
@@ -217,17 +227,6 @@ app.layout = html.Div([
         ], style={"display": "flex", "alignItems": "stretch"}),
     ]),
 ], style={"fontFamily": "'Segoe UI', -apple-system, sans-serif", "minHeight": "100vh", "background": BG})
-
-
-def _card(title, icon, color, children, flex=None):
-    style = {"background": CBG, "borderRadius": "8px", "padding": "10px 14px", "boxShadow": "0 1px 3px rgba(0,0,0,0.05)"}
-    if flex: style["flex"] = flex
-    header = []
-    if title:
-        header = [html.Div([html.I(className=f"{icon} me-2", style={"color": color, "fontSize": "11px"}),
-            html.Span(title, style={"fontWeight": "700", "fontSize": "11px", "color": color, "letterSpacing": "0.5px"})],
-            className="d-flex align-items-center mb-2")]
-    return html.Div(header + children, style=style)
 
 
 # ═══════════════════════════════════════════════════════════════════════
